@@ -211,21 +211,17 @@ Both JD extraction and profile extraction map to the **same schema structure** s
     {
       "raw": "ReactJS",
       "normalized": "React",
-      "category": "frontend/library",
-      "importance": "required"
+      "category": "frontend/library"
     },
     {
       "raw": "distributed systems",
       "normalized": "Distributed Systems",
-      "category": "domain",
-      "importance": "required"
+      "category": "domain"
     },
     {
       "raw": "Golang or Python",
       "normalized": ["Go", "Python"],
-      "category": "language",
-      "importance": "required",
-      "note": "either one accepted"
+      "category": "language"
     }
   ],
 
@@ -449,6 +445,20 @@ CREATE UNIQUE INDEX idx_skill_raw ON skill_norm_cache(LOWER(raw_name));
 - A static list needs a human curator. Nobody does that job.
 - LLM-assisted normalization handles the long tail gracefully
 
+### Skill Extraction Strictness
+
+LLMs will over-extract if you let them — "communication", "problem solving", "team player" are NOT skills in our system. The extraction prompt must be strict:
+
+**What IS a skill:** Specific technologies, languages, frameworks, tools, domain expertise, methodologies.
+- Python, React, Kubernetes, PostgreSQL, distributed systems, event-driven architecture, CI/CD, Terraform
+
+**What is NOT a skill:** Soft traits, generic abilities, job responsibilities.
+- "Good communicator", "team player", "fast learner", "problem solving", "leadership"
+
+**Prompt guidance:** "Extract only concrete, technical or domain-specific skills. Do not extract soft skills, personality traits, or generic abilities. If in doubt, don't extract it. A skill should be something you can test for or verify in a technical interview."
+
+This strictness is enforced at the **prompt level during extraction**, not at the normalization level. Normalization assumes the extracted skill is already valid — it just standardizes the name.
+
 ---
 
 ## What gets hard-filtered vs. semantic-matched
@@ -458,13 +468,28 @@ CREATE UNIQUE INDEX idx_skill_raw ON skill_norm_cache(LOWER(raw_name));
 | Experience (years) | Yes | No | Numeric, clear range |
 | CTC | Yes | No | Numeric, clear range |
 | Location + remote | Yes | No | Categorical, clear match |
-| Required skills (normalized) | Yes (≥70%) | Also yes | Names for precision, embeddings for depth |
+| Skills (normalized) | Yes (≥70%) | Also yes | Names for precision, embeddings for depth |
 | Education | No | Yes | Too nuanced for hard filters. "Masters or equivalent" can't be a boolean. |
 | Seniority | Soft filter | Yes | Titles vary wildly across companies |
 | Nice-to-have skills | No | Yes | Bonus signal, not gatekeeping |
 | Notice period | Soft filter | No | Negotiable periods need human judgment |
 | Preferences / dealbreakers | Candidate-side filter | No | Candidate opts out, not filtered out |
 | Extras (stage, team size) | No | Yes (future) | Enrichment signal, not filter |
+
+### Candidate-Side Filters (additional)
+
+Candidates have their own filter set that doesn't apply on the HR side:
+
+| Filter | Type | Example |
+|---|---|---|
+| Company names | Exact match | "Google", "Meta" |
+| Company tags | Category match | "FAANG", "unicorn", "startup" |
+| Exclude companies | Blacklist | "Infosys", "TCS" |
+| Min CTC | Numeric | 2500000 |
+| Remote only | Boolean | true |
+| Dealbreakers | From profile | "No consulting companies" |
+
+These are applied as hard filters on candidate-to-jobs matching and in chat-based search.
 
 ### Match Tiers
 
@@ -484,7 +509,6 @@ MatchTier: strong | semantic | stretch
 MatchStatus: new | shortlisted | rejected | contacted
 Seniority: intern | junior | mid | senior | lead | principal
 RemotePolicy: onsite | hybrid | remote | remote_preferred
-SkillImportance: required | nice_to_have
 SkillProficiency: beginner | intermediate | advanced | expert
 EducationStrictness: required | preferred | not_mentioned
 EducationEquivalence: strict | experience_accepted | not_specified

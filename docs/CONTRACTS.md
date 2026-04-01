@@ -71,9 +71,7 @@ Every agentic flow (LangGraph graph) has a defined contract: what it receives, w
             {
                 "raw": "string",               # Exactly as written in JD
                 "normalized": "string | list",  # Normalized via cache/LLM
-                "category": "string",
-                "importance": "required | nice_to_have",
-                "note": "string | null"         # "either one", "bonus", etc.
+                "category": "string"            # "language", "frontend/library", "domain", etc.
             }
         ],
 
@@ -359,22 +357,19 @@ This is stored in `ExtractionCorrection` table (see DATA_MODEL.md). It's not use
 
 **Trigger**: New job posted, job updated, new profile completed, profile updated. Always runs in **background**.
 
+Two distinct modes with **different input/output formats** because the filtering logic is fundamentally different per side.
+
+### 5a. Job → Candidates (HR side)
+
+HR posts a job. System finds matching candidates based on JD attributes.
+
 **Input**:
 ```python
-# For job-triggered matching (find candidates for a job):
 {
     "mode": "job_to_candidates",
     "job_id": "uuid",
     "job_attributes": { ... },
     "job_embedding": [float]
-}
-
-# For profile-triggered matching (find jobs for a candidate):
-{
-    "mode": "candidate_to_jobs",
-    "candidate_id": "uuid",
-    "profile_attributes": { ... },
-    "profile_embedding": [float]
 }
 ```
 
@@ -391,7 +386,7 @@ This is stored in `ExtractionCorrection` table (see DATA_MODEL.md). It's not use
             "hard_filter_results": {
                 "experience": {"pass": true, "detail": "3 yrs in range 3-5"},
                 "ctc": {"pass": true, "detail": "22L in range 20-30L"},
-                "skills_required": {"pass": true, "detail": "4/5 required skills matched"},
+                "skills": {"pass": true, "detail": "4/5 skills matched"},
                 "location": {"pass": false, "detail": "Candidate: Remote only, Job: Hybrid"}
             },
             "semantic_breakdown": {
@@ -409,7 +404,88 @@ This is stored in `ExtractionCorrection` table (see DATA_MODEL.md). It's not use
 }
 ```
 
+### 5b. Candidate → Jobs (Candidate side)
+
+Candidate completes profile or searches for jobs. Different filter set — candidates filter by things JDs don't have structured fields for.
+
+**Input**:
+```python
+{
+    "mode": "candidate_to_jobs",
+    "candidate_id": "uuid",
+    "profile_attributes": { ... },
+    "profile_embedding": [float],
+    "candidate_filters": {                    # Candidate's own preferences
+        "company_names": ["Google", "Meta"],  # Specific companies
+        "company_tags": ["FAANG", "unicorn"], # Company categories (resolved to actual companies)
+        "exclude_companies": ["Infosys", "TCS"],
+        "min_ctc": 2500000,
+        "remote_only": true,
+        "locations": ["Bangalore", "Remote"],
+        "keywords": "distributed systems"     # Free-text search layered on top
+    }
+}
+```
+
+**Output**:
+```python
+{
+    "matches": [
+        {
+            "job_id": "uuid",
+            "company_id": "uuid",
+            "company_name": "Google",
+            "tier": "strong | semantic | stretch",
+            "overall_score": 0.89,
+            "semantic_score": 0.93,
+            "profile_fit": {
+                "experience": {"fits": true, "detail": "3 yrs, job asks 2-5"},
+                "ctc": {"fits": true, "detail": "Job offers 25-35L, you expect 25L+"},
+                "skills": {"overlap": 0.85, "matching": ["Python", "Go", "K8s"], "missing": ["Rust"]},
+                "location": {"fits": true, "detail": "Remote available"}
+            },
+            "candidate_filter_results": {
+                "company_match": true,        # Matched "FAANG" tag
+                "ctc_meets_min": true,
+                "remote_match": true
+            },
+            "explanation": {
+                "why_relevant": "Strong skill overlap, your distributed systems experience matches well",
+                "gaps": ["Job lists Rust as a skill — you don't have it yet"],
+                "growth_opportunity": "Rust exposure at Google scale"
+            }
+        }
+    ]
+}
+```
+
+**Key differences from HR-side matching:**
+- Candidate filters include company-level preferences (specific companies, FAANG/unicorn tags, exclusions) — these don't exist on the JD side
+- Output includes `company_name` (candidate cares which company, HR already knows)
+- `profile_fit` is framed from candidate's perspective ("you have X, they want Y") vs HR perspective ("candidate has X, you need Y")
+- `growth_opportunity` field — for stretch matches, tell the candidate what they'd learn, not just what they're missing
+- Candidate's dealbreakers are applied as hard filters here (not on HR side)
+
 **Side effects**: Creates/updates Match records. Old matches from previous profile version are archived (not deleted — useful for analytics).
+
+### 5c. Chat-based Job Search (Candidate)
+
+In addition to computed matches, candidates can search via chat. This is a separate flow that uses the matching engine under the hood.
+
+```
+Candidate: "Show me backend roles at FAANG companies paying above 25 LPA"
+    ↓
+LLM parses intent → candidate_filters:
+    company_tags: ["FAANG"]
+    min_ctc: 2500000
+    keywords: "backend"
+    ↓
+Matching engine runs with these filters + profile embedding
+    ↓
+Results shown in chat with fit analysis
+```
+
+This is NOT a separate graph — it's the same matching engine invoked with `candidate_filters` extracted from natural language by the chat interface.
 
 ---
 
