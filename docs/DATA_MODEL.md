@@ -6,6 +6,7 @@
 erDiagram
     Company ||--o{ HRUser : employs
     Company ||--o{ Job : posts
+    Company ||--o{ CompanyTag : "tagged as"
     HRUser ||--o{ Job : creates
     Job ||--|| JobAttributes : has
     Job ||--o{ Match : produces
@@ -15,12 +16,31 @@ erDiagram
     CandidateProfile ||--o{ ProfileVersion : "has versions"
     SkillNormCache }o--o{ JobAttributes : "used by"
     SkillNormCache }o--o{ ProfileAttributes : "used by"
+    CompanyTagCache }o--o{ CompanyTag : "resolves to"
 
     Company {
         uuid id PK
         string name
         string domain
         text description
+        jsonb metadata
+        timestamp created_at
+    }
+
+    CompanyTag {
+        uuid id PK
+        uuid company_id FK
+        string tag
+        string source
+        timestamp created_at
+    }
+
+    CompanyTagCache {
+        uuid id PK
+        string query_term
+        string resolved_tag
+        jsonb resolved_company_ids
+        string source
         timestamp created_at
     }
 
@@ -378,6 +398,98 @@ The parsed sections of the resume PDF/DOCX, preserved in their original structur
 ```
 
 `file_hash` lets us detect if a "new" resume upload is actually the same file — skip re-extraction if it hasn't changed.
+
+---
+
+## Company Tags & Resolution
+
+Companies are tagged with categories for candidate-side filtering. Same pattern as skill normalization — seed the obvious ones, let it grow organically from search.
+
+### CompanyTag table
+
+```sql
+CREATE TABLE company_tag (
+    id UUID PRIMARY KEY,
+    company_id UUID NOT NULL REFERENCES company(id),
+    tag TEXT NOT NULL,              -- "FAANG", "unicorn", "big_tech", "consulting", "startup"
+    source TEXT NOT NULL,           -- "seed", "llm_resolved", "manual", "hr_signup"
+    created_at TIMESTAMP
+);
+
+CREATE INDEX idx_company_tag ON company_tag(tag);
+CREATE UNIQUE INDEX idx_company_tag_unique ON company_tag(company_id, tag);
+```
+
+### CompanyTagCache table
+
+When a candidate searches with a term we haven't seen, LLM resolves it → cache.
+
+```sql
+CREATE TABLE company_tag_cache (
+    id UUID PRIMARY KEY,
+    query_term TEXT NOT NULL,        -- "companies like Razorpay", "YC startups", "Big 4"
+    resolved_tag TEXT,               -- If it maps to an existing tag: "unicorn", "consulting"
+    resolved_company_ids JSONB,      -- If it maps to specific companies: ["uuid1", "uuid2"]
+    source TEXT NOT NULL,            -- "llm_resolved"
+    created_at TIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_tag_cache_query ON company_tag_cache(LOWER(query_term));
+```
+
+### How it works
+
+```
+Candidate searches: "FAANG companies"
+    ↓
+Check CompanyTag table: SELECT company_id FROM company_tag WHERE tag = 'faang'
+    ↓
+HIT → filter jobs by those company_ids
+    ↓
+---
+Candidate searches: "companies like Razorpay"
+    ↓
+Check CompanyTagCache: no match
+    ↓
+LLM resolves: "fintech unicorns in India" → tag: "fintech_unicorn"
+    + specific companies: [Razorpay, Paytm, PhonePe, CRED, ...]
+    ↓
+Cache the resolution
+    ↓
+Filter jobs by resolved company_ids
+```
+
+### Seed tags
+
+Start with these on day 1, manually tagged:
+
+| Tag | Companies |
+|---|---|
+| `faang` | Google, Meta, Apple, Amazon, Netflix |
+| `big_tech` | FAANG + Microsoft, Salesforce, Oracle, Adobe, etc. |
+| `unicorn` | Companies valued >$1B |
+| `consulting` | McKinsey, BCG, Bain, Deloitte, Accenture |
+| `service_company` | TCS, Infosys, Wipro, HCL, Cognizant |
+| `startup` | Auto-tagged based on company metadata (funding stage, team size) |
+
+### Company metadata
+
+The `Company.metadata` JSONB field stores info that helps with auto-tagging and search:
+
+```json
+{
+  "funding_stage": "Series B",
+  "valuation": "$500M",
+  "team_size": "200",
+  "industry": "fintech",
+  "founded_year": 2019,
+  "headquarters": "Bangalore",
+  "linkedin_url": "https://linkedin.com/company/...",
+  "website": "https://company.com"
+}
+```
+
+This metadata can be filled by HR during company signup or enriched later. It powers auto-tagging ("Series B" + "valuation > $1B" → auto-tag `unicorn`) and candidate searches ("fintech startups in Bangalore").
 
 ---
 
