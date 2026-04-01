@@ -1,9 +1,12 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import auth, health
+from app.api.routers import auth, candidate, health
 from app.database import async_session, engine
 from app.services.seed import seed_users
 
@@ -28,3 +31,4 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(auth.router, prefix="/api")
+app.include_router(candidate.router, prefix="/api")
