@@ -64,15 +64,20 @@ STRICT RULES for skill extraction:
 General rules:
 - Extract ONLY what is present in the resume. Do not infer or guess.
 - Use null for any field not found in the resume
-- For total_experience: calculate from work history if not explicitly stated
+- For total_experience: calculate from work history dates. "Present" means today's date (provided below). Sum all durations. Be precise.
+- For each work_history duration: calculate from start date to end date. If end date is "Present", use today's date.
 - For seniority: infer from job titles and experience level
 - current_ctc is rarely in resumes — set to null if not mentioned
 - Do NOT include expected_ctc, notice_period, job_switch, or preferences — those come from the candidate chat later
 - Return ONLY valid JSON, no markdown or extra text
 """
 
-USER_PROMPT_TEMPLATE = """Extract the professional profile from these resume sections:
+USER_PROMPT_TEMPLATE = """Today's date is {today}.
+
+Extract the professional profile from these resume sections:
 
 {sections_text}
+
+IMPORTANT: When calculating durations, "Present" means {today}. Calculate all durations precisely from start and end dates.
 
 Return ONLY valid JSON matching the schema."""

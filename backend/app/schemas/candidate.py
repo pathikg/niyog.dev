@@ -28,13 +28,18 @@ class Skill(BaseModel):
 class CTC(BaseModel):
     value: int | None = None
     currency: str = "INR"
+    base: int | None = None
+    variable: int | None = None
+    esop_value: int | None = None
     includes_esop: bool | None = None
+    note: str | None = None
 
 
 class CTCRange(BaseModel):
     min: int | None = None
     max: int | None = None
     currency: str = "INR"
+    note: str | None = None
 
 
 class Location(BaseModel):

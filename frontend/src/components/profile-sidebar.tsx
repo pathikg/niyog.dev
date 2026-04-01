@@ -38,7 +38,8 @@ function getCompletion(phase: string): number {
 function getSkillTags(profile: Record<string, unknown> | null): string[] {
   if (!profile) return [];
   const skills = profile.skills as Array<{ raw: string }> | undefined;
-  return skills?.map((s) => s.raw).slice(0, 8) ?? [];
+  const raw = skills?.map((s) => s.raw) ?? [];
+  return [...new Set(raw)];
 }
 
 export default function ProfileSidebar({ phase, profile }: ProfileSidebarProps) {
@@ -125,9 +126,9 @@ export default function ProfileSidebar({ phase, profile }: ProfileSidebarProps) 
             Extracted Skills
           </h2>
           <div className="flex flex-wrap gap-2">
-            {skills.map((skill) => (
+            {skills.map((skill, i) => (
               <span
-                key={skill}
+                key={`${skill}-${i}`}
                 className="px-3 py-1.5 bg-primary-container text-on-primary-container font-headline text-[11px] font-bold rounded-lg"
               >
                 {skill}

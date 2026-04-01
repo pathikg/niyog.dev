@@ -21,8 +21,8 @@ export default function ResumeUpload({ onUpload, disabled }: ResumeUploadProps) 
         alert("Only PDF and DOCX files are supported.");
         return;
       }
-      if (file.size > 10 * 1024 * 1024) {
-        alert("File too large. Maximum 10MB.");
+      if (file.size > 1 * 1024 * 1024) {
+        alert("File too large. Maximum 1MB.");
         return;
       }
       onUpload(file);
@@ -70,7 +70,7 @@ export default function ResumeUpload({ onUpload, disabled }: ResumeUploadProps) 
           Drop Resume Here
         </p>
         <p className="font-body text-xs text-on-surface-variant mt-2">
-          Support for PDF, DOCX (Max 10MB)
+          Support for PDF, DOCX (Max 1MB)
         </p>
       </div>
       <button

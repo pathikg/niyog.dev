@@ -5,6 +5,7 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import ChatMessage from "@/components/chat-message";
 import ResumeUpload from "@/components/resume-upload";
 import ProfileSidebar from "@/components/profile-sidebar";
+import TypingIndicator from "@/components/typing-indicator";
 
 type Phase = "upload" | "extracting" | "reviewing" | "gap_filling" | "complete";
 
@@ -27,6 +28,7 @@ export default function OnboardPage() {
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
   const [uploading, setUploading] = useState(false);
   const [streaming, setStreaming] = useState(false);
+  const [thinking, setThinking] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -74,6 +76,17 @@ export default function OnboardPage() {
               break;
 
             case "error":
+              if (data.retry) {
+                // Recoverable error — show in chat, re-show upload
+                setPhase("upload");
+                setStatusText("");
+                setMessages((prev) => [
+                  ...prev,
+                  { role: "assistant", content: data.message },
+                ]);
+                scrollToBottom();
+                return; // Stop processing this stream
+              }
               throw new Error(data.message);
 
             case "extracted":
@@ -108,7 +121,7 @@ export default function OnboardPage() {
               break;
 
             case "done":
-              setStreaming(false);
+              setStreaming(false); setThinking(false);
               setPhase("reviewing");
               scrollToBottom();
               break;
@@ -118,7 +131,7 @@ export default function OnboardPage() {
         onerror: (err) => {
           setPhase("upload");
           setStatusText("");
-          setStreaming(false);
+          setStreaming(false); setThinking(false);
           setMessages((prev) => [
             ...prev,
             {
@@ -141,7 +154,7 @@ export default function OnboardPage() {
         // Only show error if we haven't already started streaming
         setPhase("upload");
         setStatusText("");
-        setStreaming(false);
+        setStreaming(false); setThinking(false);
         setMessages((prev) => [
           ...prev,
           {
@@ -158,25 +171,87 @@ export default function OnboardPage() {
     }
   }
 
-  function handleChatSend() {
+  async function handleChatSend() {
     if (!chatInput.trim() || streaming) return;
     const msg = chatInput.trim();
     setChatInput("");
     setMessages((prev) => [...prev, { role: "user", content: msg }]);
     scrollToBottom();
 
-    // Phase 1B will wire this to the backend chat endpoint
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            "Thanks for the feedback! Chat processing will be connected in the next update. Your extracted profile is saved.",
+    setStreaming(true);
+    setThinking(true);
+    let streamStarted = false;
+
+    try {
+      const token = localStorage.getItem("token");
+      await fetchEventSource(`${API_BASE}/api/candidates/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-      ]);
-      scrollToBottom();
-    }, 300);
+        body: JSON.stringify({ message: msg }),
+        openWhenHidden: true,
+
+        onmessage: (event) => {
+          const data = JSON.parse(event.data);
+
+          switch (event.event) {
+            case "token":
+              if (!streamStarted) {
+                streamStarted = true;
+                setThinking(false);
+                setMessages((prev) => [
+                  ...prev,
+                  { role: "assistant", content: data.text },
+                ]);
+              } else {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  updated[updated.length - 1] = {
+                    ...last,
+                    content: last.content + data.text,
+                  };
+                  return updated;
+                });
+              }
+              scrollToBottom();
+              break;
+
+            case "state":
+              // Update profile and phase from backend state
+              setProfile(data.profile_attributes);
+              if (data.phase === "complete") {
+                setPhase("complete");
+              } else if (data.phase === "gap_filling") {
+                setPhase("gap_filling");
+              }
+              break;
+
+            case "done":
+              setStreaming(false); setThinking(false);
+              scrollToBottom();
+              break;
+          }
+        },
+
+        onerror: (err) => {
+          setStreaming(false); setThinking(false);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: "Something went wrong processing your message. Please try again.",
+            },
+          ]);
+          scrollToBottom();
+          throw err;
+        },
+      });
+    } catch {
+      setStreaming(false); setThinking(false);
+    }
   }
 
   return (
@@ -215,38 +290,52 @@ export default function OnboardPage() {
               </div>
             )}
 
+            {thinking && <TypingIndicator />}
+
             <div ref={chatEndRef} />
           </div>
 
-          {(phase === "reviewing" || phase === "gap_filling") && (
-            <div className="bg-surface border border-outline rounded-xl p-1 shadow-soft flex items-center gap-2 overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-              <input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleChatSend();
+          {(phase === "reviewing" || phase === "gap_filling" || phase === "complete") && (
+            <>
+              {phase === "complete" && (
+                <a
+                  href="/dashboard"
+                  className="w-full py-3 bg-primary text-white font-headline font-bold text-sm uppercase tracking-wide rounded-lg text-center hover:bg-primary-hover active:scale-[0.98] transition-all shadow-soft"
+                >
+                  Go to Dashboard
+                </a>
+              )}
+              <div className="bg-surface border border-outline rounded-xl p-1 shadow-soft flex items-center gap-2 overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleChatSend();
+                    }
+                  }}
+                  disabled={streaming}
+                  className="bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface font-body text-[15px] w-full px-5 py-4 placeholder:text-on-surface-variant/40 disabled:opacity-50"
+                  placeholder={
+                    streaming
+                      ? "Niyog is typing..."
+                      : phase === "complete"
+                      ? "Profile complete! Ask anything or head to dashboard."
+                      : "Type a correction or say 'looks good' to continue..."
                   }
-                }}
-                disabled={streaming}
-                className="bg-transparent border-none focus:ring-0 focus:outline-none text-on-surface font-body text-[15px] w-full px-5 py-4 placeholder:text-on-surface-variant/40 disabled:opacity-50"
-                placeholder={
-                  streaming
-                    ? "Niyog is typing..."
-                    : "Type a correction or say 'looks good' to continue..."
-                }
-              />
-              <button
-                onClick={handleChatSend}
-                disabled={streaming}
-                className="p-4 mr-1 text-primary hover:bg-primary/5 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
-              </button>
-            </div>
+                />
+                <button
+                  onClick={handleChatSend}
+                  disabled={streaming}
+                  className="p-4 mr-1 text-primary hover:bg-primary/5 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                  </svg>
+                </button>
+              </div>
+            </>
           )}
         </section>
 

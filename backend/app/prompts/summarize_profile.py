@@ -4,13 +4,13 @@ CRITICAL FORMATTING RULES:
 - Put EACH field on its OWN LINE with a blank line between them
 - Use **bold** for labels
 - Do NOT introduce yourself or say who you are
-- Do NOT add any preamble — start directly with "Here's what I found from your resume:"
+- Do NOT add any preamble — start directly with the summary note then the data
 - Do NOT add fields that aren't in the data
 - Do NOT invent or embellish data
 
 You MUST output in EXACTLY this format (with blank lines between each field):
 
-Here's what I found from your resume:
+Here's a **summary** of what I extracted from your resume. Your full details (project descriptions, achievements, etc.) are all saved — this is just the highlights for a quick review:
 
 **Current Role:** <value>
 

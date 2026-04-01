@@ -61,6 +61,26 @@ async def stream_complete(
             yield delta.content
 
 
+async def stream_chat(
+    system_prompt: str,
+    messages: list[dict],
+    model: str | None = None,
+) -> AsyncGenerator[str, None]:
+    """Streaming chat with full message history — proper multi-turn conversation."""
+    client = get_client()
+    all_messages = [{"role": "system", "content": system_prompt}] + messages
+    stream = await client.chat.completions.create(
+        model=model or settings.OPENROUTER_MODEL,
+        messages=all_messages,
+        temperature=0.3,
+        stream=True,
+    )
+    async for chunk in stream:
+        delta = chunk.choices[0].delta if chunk.choices else None
+        if delta and delta.content:
+            yield delta.content
+
+
 async def complete_vision(
     system_prompt: str,
     images_b64: list[str],
