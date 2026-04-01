@@ -17,23 +17,22 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
-# Check ANTHROPIC_API_KEY
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo ""
-    echo "⚠️  ANTHROPIC_API_KEY not set in environment"
-    echo "   Attempting to load from .env..."
-    export $(grep ANTHROPIC_API_KEY .env | xargs)
-fi
-
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo "❌ ANTHROPIC_API_KEY not found in .env or environment!"
+# Check LM Studio connection
+echo ""
+echo "Checking LM Studio connection..."
+if ! curl -s http://localhost:1234/v1/models > /dev/null 2>&1; then
+    echo "❌ LM Studio not running at http://localhost:1234"
+    echo "   Start LM Studio before running tests"
+    echo "   Or set LM_STUDIO_BASE_URL in .env if running elsewhere"
     exit 1
 fi
+echo "✓ LM Studio is running"
 
 echo ""
 echo "✓ Configuration loaded"
 echo "  DATABASE_URL: $(grep DATABASE_URL .env | cut -d= -f2)"
-echo "  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:0:10}...***"
+echo "  LM_STUDIO_BASE_URL: $(grep LM_STUDIO_BASE_URL .env | cut -d= -f2)"
+echo "  LM_STUDIO_MODEL: $(grep LM_STUDIO_MODEL .env | cut -d= -f2)"
 
 # Phase 1: Database
 echo ""

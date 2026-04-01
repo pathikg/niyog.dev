@@ -6,10 +6,12 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost:5432/niyog_db"
 
-    # LLM
-    ANTHROPIC_API_KEY: str = ""
+    # LLM (LM Studio - OpenAI compatible)
+    LM_STUDIO_BASE_URL: str = "http://localhost:1234/v1"
+    LM_STUDIO_MODEL: str = "local-model"
+    LM_STUDIO_API_KEY: str = ""  # Empty for local LLM
 
-    # Supabase
+    # Supabase (optional)
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
     SUPABASE_STORAGE_BUCKET: str = "onboarding-files"

@@ -1,9 +1,10 @@
-"""Propose node: Claude extracts structured schema from HR's natural language."""
+"""Propose node: LLM extracts structured schema from HR's natural language."""
 
 import json
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 
+from app.config import settings
 from app.graphs.hr_schema.state import HRSchemaState
 from app.graphs.hr_schema.prompts import (
     PROPOSE_SCHEMA_SYSTEM,
@@ -14,10 +15,10 @@ from app.graphs.hr_schema.prompts import (
 
 async def propose_schema(state: HRSchemaState) -> dict:
     """
-    Claude extracts a structured schema from HR's description.
+    LLM extracts a structured schema from HR's description.
 
     Assumes the HR's last message (in state["messages"]) describes what fields they want.
-    Calls Claude to extract and structure the schema as JSONB.
+    Calls local LLM (LM Studio) to extract and structure the schema as JSONB.
 
     Returns:
         dict with current_definition set to extracted JSONB, plus formatted summary message
@@ -32,8 +33,13 @@ async def propose_schema(state: HRSchemaState) -> dict:
     last_message = state["messages"][-1]
     hr_description = last_message.content
 
-    # Call Claude to extract schema
-    llm = ChatAnthropic(model="claude-3-5-sonnet-20241022")
+    # Call local LLM (LM Studio OpenAI-compatible)
+    llm = ChatOpenAI(
+        base_url=settings.LM_STUDIO_BASE_URL,
+        api_key=settings.LM_STUDIO_API_KEY or "not-needed",
+        model=settings.LM_STUDIO_MODEL,
+        temperature=0.7,
+    )
 
     # System + user prompt
     extraction_messages = [

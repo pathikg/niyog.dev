@@ -1,9 +1,10 @@
-"""Update node: Claude modifies the schema based on HR's request."""
+"""Update node: LLM modifies the schema based on HR's request."""
 
 import json
 from langchain_core.messages import AIMessage
-from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 
+from app.config import settings
 from app.graphs.hr_schema.state import HRSchemaState
 from app.graphs.hr_schema.prompts import (
     UPDATE_SCHEMA_SYSTEM,
@@ -14,7 +15,7 @@ from app.graphs.hr_schema.prompts import (
 
 async def update_schema(state: HRSchemaState) -> dict:
     """
-    Claude applies modifications to the current schema definition.
+    LLM applies modifications to the current schema definition.
 
     Takes the HR's request (last message) and current_definition, then returns
     an updated definition.
@@ -36,8 +37,13 @@ async def update_schema(state: HRSchemaState) -> dict:
     last_message = state["messages"][-1]
     hr_request = last_message.content
 
-    # Call Claude to update schema
-    llm = ChatAnthropic(model="claude-3-5-sonnet-20241022")
+    # Call local LLM (LM Studio OpenAI-compatible)
+    llm = ChatOpenAI(
+        base_url=settings.LM_STUDIO_BASE_URL,
+        api_key=settings.LM_STUDIO_API_KEY or "not-needed",
+        model=settings.LM_STUDIO_MODEL,
+        temperature=0.7,
+    )
 
     update_messages = [
         ("system", UPDATE_SCHEMA_SYSTEM),

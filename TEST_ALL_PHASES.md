@@ -6,7 +6,7 @@ Complete guide to set up Niyog locally and run all tests end-to-end.
 
 - PostgreSQL 14+ (local or Supabase)
 - Python 3.11+
-- Anthropic API key (for Claude calls)
+- LM Studio running on localhost:1234 (local LLM, no API key needed)
 - ~15 minutes
 
 ## Step 1: PostgreSQL Setup
@@ -57,10 +57,12 @@ cp .env.example .env
 Edit `.env`:
 ```
 DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/niyog_db
-ANTHROPIC_API_KEY=sk-ant-YOUR-KEY-HERE
+LM_STUDIO_BASE_URL=http://localhost:1234/v1
+LM_STUDIO_MODEL=local-model
+LM_STUDIO_API_KEY=
 ```
 
-Get your Anthropic API key from https://console.anthropic.com/
+LM Studio must be running locally at port 1234. The API key can be empty for local models.
 
 ## Step 3: Install Dependencies
 
@@ -73,14 +75,32 @@ pip install -e .
 # This installs:
 # - FastAPI, SQLAlchemy, Alembic
 # - LangChain, LangGraph, langgraph-checkpoint-postgres
-# - Anthropic SDK
+# - OpenAI SDK (for LM Studio compatibility)
 # - All database drivers
 ```
 
 Verify installation:
 ```bash
-python -c "import langgraph; import langchain_anthropic; print('✓ Deps OK')"
+python -c "import langgraph; import langchain_openai; print('✓ Deps OK')"
 ```
+
+## Step 3.5: Start LM Studio
+
+Before running tests, make sure LM Studio is running:
+
+```bash
+# Open LM Studio application
+# Go to Server tab
+# Click "Start Server"
+# You should see: "HTTP server listening on port 1234"
+
+# Or verify it's running:
+curl http://localhost:1234/v1/models
+
+# Should return a list of loaded models
+```
+
+If LM Studio is not running, the tests will fail at the first Claude/LLM call.
 
 ## Step 4: Run Database Migrations (Phase 1)
 
@@ -301,20 +321,19 @@ sudo systemctl start postgresql
 # Or connect to Supabase cloud instance instead
 ```
 
-### "ANTHROPIC_API_KEY not set" or authentication error
+### "LM Studio not running at http://localhost:1234" error
+
+LM Studio must be running before tests can call the local LLM:
 
 ```bash
-# Check if key is set
-echo $ANTHROPIC_API_KEY
+# Open LM Studio application and start the server
+# Or check if it's running:
+curl http://localhost:1234/v1/models
 
-# If empty, set it
-export ANTHROPIC_API_KEY=sk-ant-YOUR-KEY
-
-# Or add to .env file
-echo "ANTHROPIC_API_KEY=sk-ant-YOUR-KEY" >> .env
+# If not found, start LM Studio and click "Start Server" in the Server tab
 ```
 
-Get key from: https://console.anthropic.com/
+Make sure `LM_STUDIO_BASE_URL=http://localhost:1234/v1` in your `.env` file.
 
 ### "Partial unique index prevents second active schema" error in Phase 3
 

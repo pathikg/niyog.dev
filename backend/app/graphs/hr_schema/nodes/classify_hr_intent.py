@@ -1,8 +1,9 @@
-"""Classify node: Claude determines HR's intent from their message."""
+"""Classify node: LLM determines HR's intent from their message."""
 
 from langchain_core.messages import AIMessage
-from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 
+from app.config import settings
 from app.graphs.hr_schema.state import HRSchemaState
 from app.graphs.hr_schema.prompts import (
     CLASSIFY_HR_INTENT_SYSTEM,
@@ -12,7 +13,7 @@ from app.graphs.hr_schema.prompts import (
 
 async def classify_hr_intent(state: HRSchemaState) -> dict:
     """
-    Claude classifies the HR user's intent.
+    LLM classifies the HR user's intent.
 
     Parses the last human message and determines what action they want:
     - modify: change something in the schema
@@ -36,8 +37,13 @@ async def classify_hr_intent(state: HRSchemaState) -> dict:
 
     last_content = last_message.content
 
-    # Call Claude to classify
-    llm = ChatAnthropic(model="claude-3-5-sonnet-20241022")
+    # Call local LLM (LM Studio OpenAI-compatible)
+    llm = ChatOpenAI(
+        base_url=settings.LM_STUDIO_BASE_URL,
+        api_key=settings.LM_STUDIO_API_KEY or "not-needed",
+        model=settings.LM_STUDIO_MODEL,
+        temperature=0.7,
+    )
 
     classification_messages = [
         ("system", CLASSIFY_HR_INTENT_SYSTEM),

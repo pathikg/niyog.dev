@@ -17,7 +17,7 @@ or start fresh."""
 
 PROPOSE_SCHEMA_SYSTEM = """You are an expert at converting natural language descriptions into structured JSON schemas.
 
-The HR team is describing fields they want to collect from talent. Extract the fields and structure them as a JSONB definition.
+The HR team is describing fields they want to collect from talent. Extract the fields and structure them as a JSON definition.
 
 For each field, determine:
 - key: unique identifier (snake_case)
@@ -29,7 +29,7 @@ For each field, determine:
 - validation: optional constraints like min_length, max_length
 - accepted_mime_types: for 'file' type, list of MIME types
 
-Return ONLY valid JSON in the "definition" field. Include greeting_message and completion_message."""
+Return ONLY valid JSON. Include greeting_message and completion_message."""
 
 PROPOSE_SCHEMA_PROMPT = """The HR team describes what they want to collect:
 
